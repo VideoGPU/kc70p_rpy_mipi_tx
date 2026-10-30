@@ -1,0 +1,65 @@
+# Third-party reference documents for the kc70p_rpy_mipi_tx bridge board.
+# Downloaded into doc/vendor/<subdir>/ by doc/fetch_docs.sh (git-ignored, not redistributed).
+#
+# Format: <subdir> <file name> <url> <description...>   (whitespace separated, '#' = comment)
+# Prefer vendor permalinks that always point at the latest revision.
+
+# --- Raspberry Pi 3 Model B+ (target #1) -------------------------------------------------
+raspberry_pi  raspberry-pi-3-b-plus-reduced-schematics.pdf     https://datasheets.raspberrypi.com/rpi3/raspberry-pi-3-b-plus-reduced-schematics.pdf     Pi 3B+ reduced schematics (15-pin CSI connector, CAM_GPIO, 3V3, I2C)
+raspberry_pi  raspberry-pi-3-b-plus-mechanical-drawing.pdf     https://datasheets.raspberrypi.com/rpi3/raspberry-pi-3-b-plus-mechanical-drawing.pdf     Pi 3B+ mechanical drawing (CSI connector position)
+raspberry_pi  raspberry-pi-3-b-plus-mechanical-drawing.dxf     https://datasheets.raspberrypi.com/rpi3/raspberry-pi-3-b-plus-mechanical-drawing.dxf     Pi 3B+ mechanical drawing, DXF for CAD import
+raspberry_pi  raspberry-pi-3-b-plus-product-brief.pdf          https://datasheets.raspberrypi.com/rpi3/raspberry-pi-3-b-plus-product-brief.pdf          Pi 3B+ product brief (5 V / 2.5 A supply, interfaces)
+raspberry_pi  micro-usb-power-supply-product-brief.pdf         https://datasheets.raspberrypi.com/power-supply/micro-usb-power-supply-product-brief.pdf Official 5.1 V / 2.5 A micro-USB supply for the Pi 3B+
+# --- Raspberry Pi camera-side references -------------------------------------------------
+raspberry_pi  standard-camera-cable-200mm-reference-drawing.pdf https://pip-assets.raspberrypi.com/categories/652-raspberry-pi-camera-module-2/documents/RP-008146-DS-1-standard-camera-cable-200mm-reference-drawing.pdf  15-pin 1.0 mm camera FFC cable drawing
+raspberry_pi  mini-display-cable-200mm-reference-drawing.pdf   https://pip-assets.raspberrypi.com/categories/903-flexible-printed-circuit-fpc-cable-for-display-and-camera/documents/RP-008145-DS-1-mini-display-cable-200mm-reference-drawing.pdf  22-pin 0.5 mm "mini" FPC cable drawing (Pi 5 / CM / Zero)
+raspberry_pi  hq-camera-schematics.pdf                         https://datasheets.raspberrypi.com/hq-camera/hq-camera-schematics.pdf                     HQ Camera schematics - camera-side reference (power enable, regulators, connector)
+raspberry_pi  rpi-doc-camera-pinouts.adoc                      https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/accessories/camera/pinouts.adoc  Official 15-pin and 22-pin CSI pinouts + connector P/Ns (CC BY-SA 4.0)
+raspberry_pi  rpi-doc-csi-2-usage.adoc                         https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/accessories/camera/csi-2-usage.adoc  How the Pi CSI-2 receiver (Unicam) expects sensors to behave (CC BY-SA 4.0)
+raspberry_pi  rpi-doc-camera-connector-schematic.png           https://raw.githubusercontent.com/raspberrypi/documentation/master/documentation/asciidoc/accessories/camera/images/RPi-S5-conn.png  Schematic snippet of the Pi CSI camera connector
+# --- Raspberry Pi 22-pin hosts (compatibility references) --------------------------------
+raspberry_pi  raspberry-pi-4-reduced-schematics.pdf            https://datasheets.raspberrypi.com/rpi4/raspberry-pi-4-reduced-schematics.pdf            Pi 4B reduced schematics (same 15-pin CSI as 3B+)
+raspberry_pi  raspberry-pi-zero-2-w-reduced-schematics.pdf     https://datasheets.raspberrypi.com/rpizero2/raspberry-pi-zero-2-w-reduced-schematics.pdf Pi Zero 2 W reduced schematics (22-pin, 2-lane)
+raspberry_pi  raspberry-pi-5-product-brief.pdf                 https://datasheets.raspberrypi.com/rpi5/raspberry-pi-5-product-brief.pdf                 Pi 5 product brief (2x 22-pin 4-lane CSI/DSI)
+raspberry_pi  raspberry-pi-5-mechanical-drawing.pdf            https://datasheets.raspberrypi.com/rpi5/raspberry-pi-5-mechanical-drawing.pdf            Pi 5 mechanical drawing
+raspberry_pi  cm4io-datasheet.pdf                              https://datasheets.raspberrypi.com/cm4io/cm4io-datasheet.pdf                              CM4 IO board datasheet + schematics (CAM0 2-lane / CAM1 4-lane, 22-pin)
+raspberry_pi  CM4IO-KiCAD.zip                                  https://datasheets.raspberrypi.com/cm4io/CM4IO-KiCAD.zip                                  CM4 IO board KiCad design (reference 22-pin CSI footprints/symbols)
+raspberry_pi  cm5io-datasheet.pdf                              https://datasheets.raspberrypi.com/cm5/cm5io-datasheet.pdf                                CM5 IO board datasheet + schematics (22-pin 4-lane CSI)
+
+# --- Board-to-board connector mating FMC_MIPI J2 (Samtec QTH-060-01-L-D-A) ---------------
+connectors    samtec-qsh-qth-product-spec.pdf                  https://suddendocs.samtec.com/productspecs/qsh-qth.pdf                                    Samtec QSH/QTH product specification (ratings, stack heights)
+connectors    samtec-qsh-catalog.pdf                           https://suddendocs.samtec.com/catalog_english/qsh.pdf                                     Samtec QSH catalog page (socket used on the bridge)
+connectors    samtec-qsh-xxx-01-x-d-a-mkt.pdf                  https://suddendocs.samtec.com/prints/qsh-xxx-01-x-d-xxx-x-xx-mkt.pdf                     Samtec QSH-xxx-01-x-D-A mechanical drawing (bridge-side socket, mates with FMC_MIPI J2)
+connectors    samtec-qsh-xxx-01-x-d-footprint.pdf              https://suddendocs.samtec.com/prints/qsh-xxx-01-x-d-xx-footprint.pdf                     Samtec QSH-xxx-01 recommended PCB footprint
+connectors    samtec-qth-xxx-x-d-a-mkt.pdf                     https://suddendocs.samtec.com/prints/qth-xxx-xx-x-d-xxx-xx-x-xx-mkt.pdf                  Samtec QTH mechanical drawing (FMC_MIPI J2 side, for stack-up)
+
+# --- FPGA side (KC705 + D-PHY emulation used by FMC_MIPI) --------------------------------
+fpga_amd      xapp894-d-phy-solutions.pdf                      https://docs.amd.com/api/khub/documents/3CJjPuMjhJXFySrDuQE6eQ/content                   AMD XAPP894 D-PHY solutions (resistor-network D-PHY TX used by FMC_MIPI)
+fpga_amd      ug810_KC705_Eval_Bd.pdf                          https://docs.amd.com/api/khub/documents/g0YC14NTyJ_D9ZQTSmzzWg/content                   AMD UG810 KC705 board user guide (FMC HPC/LPC, VADJ)
+
+# --- Parts on the FMC_MIPI side of J2 (define the interface electrically) ----------------
+fmc_mipi_parts tca9406.pdf                                     https://www.ti.com/lit/ds/symlink/tca9406.pdf                                             TI TCA9406 I2C level translator (FMC_MIPI IC3-IC5, J2 side at 1.8 V)
+fmc_mipi_parts sn74avch16t245.pdf                              https://www.ti.com/lit/ds/symlink/sn74avch16t245.pdf                                      TI SN74AVCH16T245 (FMC_MIPI U3: MCLK/PWR/RST in, GPIO9/CAM_INTR out; U8: LP drivers)
+fmc_mipi_parts ts3ddr3812.pdf                                  https://www.ti.com/lit/ds/symlink/ts3ddr3812.pdf                                          TI TS3DDR3812 switch in the CSI lanes (FMC_MIPI U5/U6, HS/LP select)
+fmc_mipi_parts at24mac402.pdf                                  https://ww1.microchip.com/downloads/en/DeviceDoc/Atmel-8807-SEEPROM-AT24MAC402-602-Datasheet.pdf  Microchip AT24MAC402 EEPROM on the camera I2C bus (0x54 / 0x5C)
+
+# --- Candidate parts for the bridge (I2C translation between 1.8 V and host I/O) ---------
+bridge_parts  pca9306.pdf                                      https://www.ti.com/lit/ds/symlink/pca9306.pdf                                             TI PCA9306 passive I2C level translator (works behind TCA9406, clock stretching OK)
+bridge_parts  lsf0102.pdf                                      https://www.ti.com/lit/ds/symlink/lsf0102.pdf                                             TI LSF0102 2-ch bidirectional translator (I2C / GPIO)
+
+# --- Synaptics Astra SL2610 SoC and Astra Machina SL2610 developer kit (target #2) -------
+synaptics_sl2610 sl2610-datasheet.pdf                          https://cp.synaptics.com/cognidox/download/NR-160466-DS-APPROVED.pdf      SL2610 product line datasheet (CSI-2 RX: 1x 2-lane, up to 1.5 Gb/s/lane, 2 VCs)
+synaptics_sl2610 sl2610-product-line-brief.pdf                 https://cp.synaptics.com/cognidox/download/NR-160468-PB-APPROVED.pdf      SL2600-series / SL2610 product line brief
+synaptics_sl2610 machina-sl2600-devkit-product-brief.pdf       https://cp.synaptics.com/cognidox/download/NR-160469-PB-APPROVED.pdf      Astra Machina SL2600-series developer kit product brief
+synaptics_sl2610 machina-sl2600-devkit-user-guide.pdf          https://cp.synaptics.com/cognidox/download/NR-160458-MS-APPROVED.pdf      Astra Machina SL2600-series developer kit user guide (J206 CSI0, power 15 V USB-C)
+synaptics_sl2610 machina-io-board-schematic.zip                https://cp.synaptics.com/cognidox/download/NR-156037-SM-APPROVED.zip      Machina I/O board schematic (shared SL16x0/SL2610), sheet 06 = J206 MIPI CSI0 22-pin
+synaptics_sl2610 machina-sl2610-core-module-schematic.zip      https://cp.synaptics.com/cognidox/download/NR-159738-SM-APPROVED.zip      SL2610 core module schematic (CSI0 RD0/RD1/RCK only)
+synaptics_sl2610 machina-mipi-csi-camera-connection-appnote.pdf https://cp.synaptics.com/cognidox/download/NR-156839-AN-APPROVED.pdf     Astra Machina MIPI CSI camera hardware connection app note
+synaptics_sl2610 machina-twsi-i2c-appnote.pdf                  https://cp.synaptics.com/cognidox/download/NR-158667-AN-APPROVED.pdf      Astra Machina TWSI (I2C) app note: bus voltages, pull-ups
+synaptics_sl2610 machina-sl2600-gpio-pinmux-appnote.pdf        https://cp.synaptics.com/cognidox/download/NR-160338-AN-APPROVED.pdf      Astra Machina SL2600 GPIO pin-multiplexing app note
+synaptics_sl2610 astra-doc-hw-sl2600.rst.txt                   https://synaptics-astra.github.io/doc/v/latest/_sources/hw/sl2600.rst.txt  Astra SDK docs: SL2600 developer kit hardware guide (source text)
+synaptics_sl2610 astra-doc-isp-sensor-integration.rst.txt      https://synaptics-astra.github.io/doc/v/latest/_sources/subject/isp_sensor_integration.rst.txt  Astra SDK docs: ISP sensor integration (DT pattern, ov5647 example)
+
+# --- Synaptics / Google Coralboard SL (SL2619 on Grinn AstraSOM-261x) (target #3) --------
+coralboard    coral-product-brief.pdf                          https://developers.google.com/static/coral/CoralProductBrief-Oct2026.pdf  Google Coral platform product brief (Oct 2026)
+coralboard    grinn-ov5647-camera-overlay.dtso                 https://raw.githubusercontent.com/grinn-global/meta-grinn-astra/90c0f56fa63c06fac265d7c019f050fd45ccf058/meta-grinn-astra-bsp/recipes-kernel/linux/grinn-astra-261x/common/ov5647-camera-overlay.dtso  Grinn AstraSOM-261x OV5647 overlay (I2C2 @0x36, pwdn porta 5, 2 lanes)
