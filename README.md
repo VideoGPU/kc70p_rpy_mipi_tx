@@ -31,6 +31,27 @@ camera inputs of single-board computers. With it, the KC705 FPGA (running the
   for the target pinouts, and [doc/board_compatibility.md](doc/board_compatibility.md) for other popular
   boards and the connector interchangeability table.
 
+## Key findings (stage 1)
+
+* **FMC_MIPI J2** ([doc/fmc_mipi_interface.md](doc/fmc_mipi_interface.md)):
+  * Ports C and D share their HS/LP select lines. Use them as one 4-lane port or as the same stream
+    twice, not as two independent cameras.
+  * All J2 I/O is 1.8 V. TCA9406 I2C translators go high-Z when FMC_MIPI is unpowered.
+  * An AT24MAC402 EEPROM answers at 0x54/0x5C on the camera I2C bus.
+  * The FPGA-side enable/select pins are documented. The "DATA"/"CLOCK" switch-enable nets actually
+    enable port C / port D.
+  * FMC_MIPI's own review notes that the TS3DDR3812 lane switch is weak for D-PHY HS signals.
+* **Raspberry Pi 3 B+**: R15 connector (TE 1-1734248-5), 2 lanes at up to 1 Gb/s, 3.3 V I2C shared
+  with the display connector. Emulating an OV5647/IMX219, or a TC358743 HDMI bridge, are the host-driver
+  options.
+* **Astra Machina SL2610**: J206 is a 22-pin connector with the RPi signal order (numbered from the 3V3
+  end), 2 lanes at up to 1.5 Gb/s, 3.3 V I2C shared with board power management. Confirmed from the
+  Synaptics schematic.
+* **Coralboard SL**: same SoC, but the CSI connector is not published. Measure it on a real board.
+* **Other boards**: an RPi 15-pin plus an RPi 22-pin output reach about 25 popular boards directly. With
+  a 1.8 V I/O option and CAM_IO1 routing (Jetson MCLK) the bridge reaches a few more. Coral Dev Board,
+  Rockchip/Khadas 30-pin and NXP Mini-SAS boards need adapters. Jetson TX2 takes FMC_MIPI directly.
+
 ## Repository layout
 
 ```

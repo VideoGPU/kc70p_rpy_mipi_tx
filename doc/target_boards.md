@@ -27,6 +27,9 @@ What the bridge needs for all three:
   Coralboard level is known: a selectable host I/O reference.
 * Host 3.3 V from the camera connector routed to J2 108/110 ("host present"), and the power-enable GPIO
   routed to J2 93 (see [fmc_mipi_interface.md](fmc_mipi_interface.md)).
+* Only a few mA drawn from the host 3.3 V. No vendor publishes the camera-supply current budget; the
+  Cameleon rule (CAM-SYS-014) is at most 10 mA per host rail, and no back-feeding.
+* CAM_IO0/CAM_IO1 treated as inputs by default. Their meaning differs between hosts.
 
 Pi 3B+ and Machina J206 both use the Raspberry Pi signal order, so one RPi-pinout output reaches both:
 * Pi 3B+: a 15-pin output with a standard 15-15 cable.
@@ -51,13 +54,22 @@ Sources: `raspberry-pi-3-b-plus-reduced-schematics.pdf`, `rpi-doc-camera-pinouts
 `rpi-doc-csi-2-usage.adoc`, `raspberry-pi-3-b-plus-product-brief.pdf`.
 
 * Receiver: BCM2837 "Unicam", CSI-2 D-PHY 1.1. Models before Pi 5 route only 2 data lanes of the second
-  Unicam instance to the connector.
+  Unicam instance to the connector, at up to 1 Gb/s per lane (Pi 5 product brief).
 * Connector: 15-pin 1.0 mm FFC, TE 1-1734248-5 on the 3B+ schematic (RPi documentation: compatible with
   Amphenol SFW15R-2STE1LF). The Pi 4B uses the same pinout but leaves CAM_IO1 (pin 12) unconnected.
+* Pin 1 (RPi documentation): with the board upright and the logo readable, pin 1 is the contact furthest
+  from you, nearest the GPIO header. On a camera board held lens-down with the connector on the right, pin
+  1 is the contact nearest to you.
+* The camera I2C (SCL0/SDA0, 1.8 kOhm pull-ups to 3.3 V) also goes to the DSI display connector.
 * Software: `bcm2835-unicam` + a V4L2 sensor driver + a device-tree overlay. The overlay sets the
   number of lanes, continuous or non-continuous clock, and the link frequency, so the FPGA emulation must
   match one supported sensor profile (for example OV5647 at 0x36, or IMX219 at 0x10) or come with its own
   driver and overlay.
+* Alternative: the Pi kernel also supports two CSI-2 bridge chips, ADV728x-M (analog video) and Toshiba
+  TC358743 (HDMI). If the FPGA emulated a TC358743 instead of a sensor, the Pi would receive RGB888 or
+  YUV422 frames with no ISP tuning. Over 2 lanes the documented limits are 1080p30 RGB888 or 1080p50
+  YUV422. The FPGA I2C target would then have to emulate the TC358743 registers (timing detection,
+  EDID) instead of a sensor's.
 
 | Pin | Name | Function | Bridge source (FMC_MIPI J2) |
 |---|---|---|---|
@@ -80,19 +92,25 @@ Sources: `machina-io-board-schematic.zip` (sheet 06 "CONN - MIPI CSI" and sheet 
 `sl2610-datasheet.pdf` section 2.8, `astra-doc-hw-sl2600.rst.txt`,
 `machina-mipi-csi-camera-connection-appnote.pdf`, `astra-doc-isp-sensor-integration.rst.txt`.
 
-* Receiver: SL2610 family (SL2619 on the kit). One 2-lane CSI-2 RX, up to 1.5 Gb/s per lane, 2 virtual
-  channels, HDR, ISP. The SL2611 and SL2615 SKUs have no CSI.
+* Receiver: SL2610 family (SL2619 on the kit). One 2-lane CSI-2 RX, up to 1.5 Gb/s per lane, up to
+  2160p30, 2 virtual channels, HDR, multidrop, ISP. The PHY runs from MIPI_CSI_AVDD1P8 (1.8 V) with a
+  200 Ohm REXT. A hardware camera-mute pin exists (CAMERA_MUTE, SODIMM 144). CSI pins exist on SL2613,
+  SL2617 and SL2619; SL2611 and SL2615 have no CSI.
 * The I/O board is shared with the SL16x0 core modules. The SL2610 core module drives only
-  CSI0 RD0/RD1/RCK (SODIMM 67-81), which go to **J206**. The 15-pin J207 (CSI1, RPi 15-pin pinout) is
-  not used with SL2610. Note: the camera app note's 15-pin "MIPI-CSI1" pin table names SL2619 too,
-  but the schematic and the SL2600 user guide show that SL2610 reaches only J206.
+  CSI0 RD0/RD1/RCK (SODIMM 67-81), which go to **J206**. The 15-pin J207 (CSI1, part
+  `CON15_1X15_DRB_SFW`, RPi 15-pin pinout, I2C on V3P3.TW0) is fed from SODIMM 28-42, which are all
+  "N/A" on the SL2610 core module, so J207 is used only with SL1680 core modules. Note: the camera app
+  note's 15-pin "MIPI-CSI1" pin table names SL2619 too, but the schematic and the SL2600 user guide
+  show that SL2610 reaches only J206.
 * Connector J206: 22-pin 0.5 mm FPC (schematic value `CON_5051102296`, probably Molex 505110-2296, not
   verified). The Synaptics app note inserts the cable with the stiffener facing up, so J206 is bottom
   contact. Depending on the board build it has an edge-rotate or a pull-push actuator.
 * I2C: SM_TW0 (SODIMM 138/140, 1.8 V), level-shifted to 3.3 V on the I/O board, 33 Ohm series
-  resistors. **The bus is shared** with current monitors (0x40, 0x41, 0x42, 0x45) and FXL6408 IO
-  expanders (0x43, 0x44) that switch board power. The emulated sensor must not use these addresses, and
-  the bridge must never hold the bus low. FMC_MIPI's EEPROM at 0x54/0x5C does not collide.
+  resistors. All SL2610 TWSI ports are 1.8 V natively; Synaptics recommends 2.2 kOhm pull-ups and a
+  level shifter for 3.3 V targets (TWSI app note). **The bus is shared** with current monitors (0x40,
+  0x41, 0x42, 0x45) and FXL6408 IO expanders (0x43, 0x44) that switch board power. The emulated sensor
+  must not use these addresses, and the bridge must never hold the bus low. FMC_MIPI's EEPROM at
+  0x54/0x5C does not collide.
 * Software: Astra SDK (Yocto). Any sensor with a V4L2 subdevice driver can be added through the device
   tree (`sl2619-rdk.dts`, camera on `i2c0`) and the ISP media-server configuration. OV5647 is the
   reference sensor.
@@ -136,7 +154,21 @@ Sources: Google Coral pages (`developers.google.com/coral/products/...`), Synapt
   22-pin DSI connector suggest a 22-pin 0.5 mm part. This is an inference only (low confidence).
 * Linux (Grinn BSP overlay for AstraSOM-261x, verified file): OV5647 on `i2c2` at 0x36,
   `pwdn-gpios = <&porta 5 GPIO_ACTIVE_LOW>` (power-enable role), 2 data lanes, non-continuous clock,
-  ISP enabled. The Coralboard overlay itself (`grinn-astra-261x-coral-hat-overlay.dtbo`) is not public.
+  ISP enabled. Google's user guide names the Coralboard overlays `grinn-astra-261x-coral-hat-overlay.dtbo`
+  and `grinn-astra-261x-coral-ws-panel-overlay.dtbo`; their sources are not public.
+* Software: the preloaded image is a Grinn-customised Astra SDK v2.2 OOBE image (Yocto 5.0
+  "Scarthgap"). Synaptics plans Coralboard support in the regular Astra SDK later in 2026; its SDK
+  download page says "coming soon".
+* Mechanics: the sensor add-on board (HAT) plugs on top of the Coralboard and the camera flex folds under
+  it, so the CSI connector sits under the HAT. With the bridge, leave the HAT off or route the flex out
+  from under it.
+* Board facts: USB-C for power and host data (ADB, NCM networking); USB-A host port limited to about
+  0.6 A at 5 V; 20-pin header with a 3.3 V UART (pin 4 GND, 6 SM_URT0_TXD, 8 SM_URT0_RXD); mikroBUS and
+  Qwiic connectors; 3.7 V LiPo input (JST-PH 2.0); M.2 2230 Wi-Fi/BT (AMPAK AP12611); boot switch (eMMC
+  default).
+* Availability: Limited / Google I/O Edition first, then pre-orders through DigiKey (Coral site, July
+  2026). Synaptics support (https://synacsm.atlassian.net/servicedesk/customer/portal/2987) is the place
+  to ask for the CSI connector pinout.
 * Open points to measure on a real board before connecting the bridge: which end is pin 1, the 3V3
   pin, the I2C pull-up voltage (1.8 V or 3.3 V), and the GND pins.
 * Power: USB-C, from a host port or a USB-C supply.

@@ -22,16 +22,22 @@ The files are git-ignored. [vendor.sha256](vendor.sha256) records the checksums 
 | `fpga_amd/` | XAPP894 (D-PHY with resistor networks), UG810 (KC705) | FPGA-side D-PHY and FMC details |
 | `fmc_mipi_parts/` | TCA9406, SN74AVCH16T245, TS3DDR3812, AT24MAC402 | Electrical behaviour of the FMC_MIPI side of J2 |
 | `bridge_parts/` | PCA9306, LSF0102 | Candidate I2C/GPIO translators for the bridge |
+| `other_boards/` | Coral Dev Board schematic and datasheet page; NVIDIA Orin Nano hardware layout; Jetson Nano 2GB user guide | Evidence for [board_compatibility.md](board_compatibility.md) |
 
 ## Documents that must be fetched by hand
 
 | Document | Link | Why not scripted |
 |---|---|---|
 | NVIDIA Jetson TX1/TX2 Developer Kit Carrier Board Specification (camera connector) | https://developer.nvidia.com/embedded/dlc/jetson-tx1-tx2-developer-kit-carrier-board-spec | NVIDIA developer login |
+| NVIDIA Jetson Orin Nano Developer Kit Carrier Board Specification (SP-11324-001, camera pin levels) | https://developer.nvidia.com/embedded/downloads | NVIDIA developer login |
+| NXP i.MX 8M Plus / i.MX 93 EVK schematics (camera connectors) | https://www.nxp.com/ | NXP account login |
 | Amphenol SFW15R-2STE1LF (RPi 15-pin 1.0 mm) drawing | https://www.amphenol-cs.com/product/sfw15r2ste1lf.html | site blocks scripts |
 | Amphenol F32Q-1A7H1-11022 (RPi 22-pin 0.5 mm) drawing | https://www.amphenol-cs.com/product/f32q1a7h111022.html | site blocks scripts |
 | Molex 505110-2296 (probable Machina J206 part) | https://www.molex.com/en-us/products/part-detail/5051102296 | site not reachable from scripts; part number not confirmed |
 | Coralboard SL schematics / camera connector pinout | Synaptics support portal: https://synacsm.atlassian.net/servicedesk/customer/portal/2987 | not published |
+| Coralboard kit photos (CSI connector and flex cable) | https://developers.google.com/coral/products/SL2610-get-started | check by eye; could not be analysed in this session |
+| Coralboard SDK | https://www.synaptics.com/coralboard-sdk-download | "coming soon" page |
+| Astra SDK offline documentation zip | https://synaptics-astra.github.io/doc/v/latest/documentation.zip | linked from the docs site but returns 404; use the online docs |
 | Samtec high-speed board-to-board design guide (19 MB, optional) | https://suddendocs.samtec.com/literature/samtec-high-speed-b2b-design-guide.pdf | large, optional |
 | MIPI CSI-2 and D-PHY specifications | https://www.mipi.org/specifications | MIPI Alliance members only |
 | ANSI/VITA 57.1 FMC standard | https://www.vita.com/ | paid standard |

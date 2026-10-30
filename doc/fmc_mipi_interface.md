@@ -18,6 +18,40 @@ files are identical on `master` `319e640`), netlist `FMC_MIPI_v2.net` (KiCad 6.0
 | Footprint | `FMC_MIPI/Libraries/FMC_MIPI_v2.pretty/samtec-qsh-QSH-060-01-X-D-A.kicad_mod` can be reused (check pin-1 orientation against the Samtec drawing in `doc/vendor/connectors/`) |
 | SI rating | 10.5 GHz / 21 Gb/s differential at 5 mm stack (Samtec QSH/QTH product spec) |
 
+## FPGA side (for firmware and bring-up)
+
+FMC_MIPI J1 is a Samtec ASP-134488-01 (FMC HPC footprint). Only LA-bank pins are used. The
+MIPI_CSI2_TX constraints (`constrains_for_KC705.xdc`) place it on the KC705 **FMC HPC connector J22**:
+`cam0_mclk` is FPGA pin G22 = HPC LA31_P (UG810). KC705 VADJ_FPGA powers the FPGA side of every FMC_MIPI
+level shifter. Its default is 2.5 V (1.8 V and 3.3 V are possible; UG810).
+
+| Function | FMC pin | FMC_MIPI path |
+|---|---|---|
+| HS port C: CLK / D0 / D1 | LA00_CC / LA07 / LA04 | resistor networks -> U5 B port |
+| HS port D: CLK / D0 / D1 | LA32 / LA30 / LA28 | resistor networks -> U6 B port |
+| LP port C: CLK / D0 / D1 | LA19 / LA15 / LA11 | U8 (1.2 V side) -> U5 C port |
+| LP port D: CLK / D0 / D1 | LA20 / LA16 / LA12 | U8 (1.2 V side) -> U6 C port |
+| HS/LP select, data lanes of C and D | LA08_P | IC1 -> SEL1 of U5 and U6 |
+| HS/LP select, clock lanes of C and D | LA08_N | IC1 -> SEL2 of U5 and U6 |
+| Port C switch enable (EN_U5) | LA09_P, net `FMC_EN_MIPI_OUT_DATA_VADJ`, xdc `en_mipi_out_data_vadj` | IC1 -> R37 -> U5 EN |
+| Port D switch enable (EN_U6) | LA09_N, net `FMC_EN_MIPI_OUT_CLOCK_VADJ`, xdc `en_mipi_out_clock_vadj` | IC1 -> R38 -> U6 EN |
+| FPGA -> host GPIO enable (active low) | LA13_P | IC7 -> U3 2OE |
+| I2C_CAM / CAM_I2C2 / I2C_GP0 (SCL, SDA) | LA22_N, LA22_P / LA03_P, LA05_P / LA02_P, LA03_N | IC3 / IC4 / IC5 TCA9406 |
+| MCLK / PWR / RST from host | LA31_P / LA29_P / LA25_N | U3 |
+| GPIO9 / CAM_INTR to host | LA26_N / LA26_P | U3 |
+| Host rail sense 3V3 / 2V8 / 1V8 / 1V2 | LA01_N_CC / LA01_P_CC / LA25_P / LA02_N | U2 / U2 / U3 / IC6 |
+
+The "DATA" and "CLOCK" names of the two switch-enable nets are misleading: LA09_P enables the whole
+port C switch, and LA09_N enables the whole port D switch.
+
+## Known limitation of this FMC_MIPI revision
+
+`FMC_MIPI/review_2021.txt` notes that the TS3DDR3812 switch (U5/U6) is "not good for handling SLVS
+signals" (D-PHY HS). It points to XAPP1339 and suggests HD3SS3411, TMUXHS4412, Diodes PI3WVR628 (a MIPI
+switch) or TS5MP645 for a future revision. The bridge cannot fix this. It should add as little as
+possible to the channel (short, 100 Ohm differential, no stubs or test points on the lanes), and the
+lane eye should be checked at the host connector during bring-up.
+
 ## Pins used by FMC_MIPI
 
 Direction is seen from FMC_MIPI ("Out" = FMC_MIPI drives towards the host).

@@ -41,10 +41,11 @@ selected() {
 }
 
 # Reject HTML error / login pages saved in place of the real document.
+# $1 = downloaded file, $2 = final name (its extension selects the check).
 looks_valid() {
-  local f="$1" magic
+  local f="$1" name="$2" magic
   magic="$(head -c 8 "$f" | tr -d '\0')"
-  case "$f" in
+  case "$name" in
     *.pdf) [[ "$magic" == %PDF* ]] ;;
     *.zip) [[ "$magic" == PK* ]] ;;
     *.png) [[ "$magic" == ?PNG* ]] ;;
@@ -66,7 +67,7 @@ while read -r dir file url _desc; do
   fi
   mkdir -p "$dest/$dir"
   if curl -fsSL --retry 3 --retry-delay 2 --max-time 600 -A "$ua" -o "$out.part" "$url" </dev/null \
-      && looks_valid "$out.part"; then
+      && looks_valid "$out.part" "$out"; then
     mv -f "$out.part" "$out"
     ok=$((ok + 1))
     echo "OK    $dir/$file"
