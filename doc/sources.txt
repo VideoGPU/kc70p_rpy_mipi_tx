@@ -64,7 +64,7 @@ synaptics_sl2610 astra-doc-isp-sensor-integration.rst.txt      https://synaptics
 coralboard    coral-product-brief.pdf                          https://developers.google.com/static/coral/CoralProductBrief-Oct2026.pdf  Google Coral platform product brief (Oct 2026)
 coralboard    grinn-ov5647-camera-overlay.dtso                 https://raw.githubusercontent.com/grinn-global/meta-grinn-astra/90c0f56fa63c06fac265d7c019f050fd45ccf058/meta-grinn-astra-bsp/recipes-kernel/linux/grinn-astra-261x/common/ov5647-camera-overlay.dtso  Grinn AstraSOM-261x OV5647 overlay (I2C2 @0x36, pwdn porta 5, 2 lanes)
 
-# --- Other popular boards (references for board_compatibility.md) ------------------------
+# --- Other popular boards (references for board_compatibility.txt) ------------------------
 other_boards  coral-dev-board-baseboard-schematic.pdf          https://github.com/google-coral/electricals/raw/master/dev_board/Coral-Dev-Board-baseboard-schematic.pdf  Coral Dev Board baseboard schematic (24-pin CSI connector, not RPi-compatible)
 other_boards  coral-dev-board-datasheet.html                   https://coral.ai/docs/dev-board/datasheet/                                 Coral Dev Board datasheet page (24-pin CSI pinout)
 other_boards  jetson-orin-nano-devkit-hardware-layout.html     https://docs.nvidia.com/jetson/orin-nano-devkit/user-guide/latest/hardware_layout.html  Orin Nano dev kit: 2x 22-pin 0.5 mm bottom-contact CSI, 15-to-22 cable for RPi v2
