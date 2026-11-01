@@ -363,7 +363,8 @@ CSI-2 lanes
 -----------
 
 - Two 2-lane D-PHY ports: port C (Jetson CSI2: D0 19/21, D1 31/33, CLK 25/27) and port D
-  (Jetson CSI3: D0 20/22, D1 32/34, CLK 26/28). HS comes from FPGA LVDS outputs through
+  (Jetson CSI3: D0 20/22, D1 32/34, CLK 26/28). HS comes from FPGA BLVDS_25 outputs
+  (port C in FPGA bank 16, port D in bank 17) through
   XAPP894-style resistor networks (220/47/9.1 ohm), LP comes from 1.2 V CMOS drivers
   (U8, SN74AVCH16T245 at 1.2 V), and the TS3DDR3812 switches U5/U6 select HS or LP. Lane
   rate in the existing firmware (MIPI_CSI2_TX
@@ -375,10 +376,13 @@ CSI-2 lanes
 
   1. one 2-lane port (C or D) to one host;
 
-  2. the same 2-lane stream on C and D to two hosts at the same time;
+  2. two 2-lane cameras on C and D in lock-step (same timing and packet lengths, image
+     content may differ), to two host ports or two hosts at the same time;
 
   3. one 4-lane port: clock = C_CLK, lanes 0..3 = C_D0, C_D1, D_D0, D_D1 (D_CLK unused),
-     provided the firmware drives both ports with the same timing.
+     provided the firmware drives both ports with the same timing. Port D's HS path on
+     FMC_MIPI is 48.7 mm shorter than port C's, so this mode needs length compensation
+     (design.txt, section 3.3).
 
 Two independent streams with different timing are not possible without reworking
 FMC_MIPI.

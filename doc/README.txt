@@ -15,6 +15,10 @@ Project documents
   Document: board_compatibility.txt
   Content: Other popular boards: connector requirements, mechanical and out-of-the-box
     electrical interchangeability
+  --------------------------------------------------------------------
+  Document: design.txt
+  Content: Bridge design: validation of the O22 (RPi 22-pin) decision, operating modes,
+    lane timing, levels, pin maps, assembly options, open decisions, bring-up checklist
 
 Third-party reference documents
 -------------------------------

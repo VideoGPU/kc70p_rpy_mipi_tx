@@ -6,11 +6,15 @@ the MIPI CSI-2 camera inputs of single-board computers. With it, the KC705 FPGA 
 the MIPI_CSI2_TX <https://github.com/VideoGPU/MIPI_CSI2_TX> firmware) appears as a
 camera module to:
 
-1. Raspberry Pi 3 Model B+
+1. Raspberry Pi boards (wherever RPi cameras work; 22-to-15-pin cable for the 15-pin
+   connector of Pi 1-4, including the Raspberry Pi 3 Model B+)
 
-2. Synaptics Astra Machina SL2610 developer kit
+2. NVIDIA Jetson Nano-class boards (Jetson Nano, Jetson Orin Nano and others)
 
-3. Synaptics Coralboard(TM) for Edge AI (Coralboard SL, SL2610-based)
+3. Synaptics Astra Machina SL2610 developer kit
+
+The Synaptics Coralboard(TM) SL (SL2610-based), a stage-1 target, is on hold until its
+camera connector is identified (doc/design.txt, decision OD-5).
 
 System overview
 ---------------
@@ -43,8 +47,8 @@ Key findings (stage 1)
 
 - FMC_MIPI J2 (doc/fmc_mipi_interface.txt):
 
-  - Ports C and D share their HS/LP select lines. Use them as one 4-lane port or as the
-    same stream twice, not as two independent cameras.
+  - Ports C and D share their HS/LP select lines. Use them as one 4-lane port or as two
+    cameras in lock-step (same timing), not as two independent cameras.
 
   - All J2 I/O is 1.8 V. TCA9406 I2C translators go high-Z when FMC_MIPI is unpowered.
 
@@ -83,6 +87,7 @@ Repository layout
     |-- fmc_mipi_interface.txt     FMC_MIPI J2 pin map and electrical notes (bridge input)
     |-- target_boards.txt          camera connectors of the three target hosts
     |-- board_compatibility.txt    popular boards: requirements and interchangeability table
+    |-- design.txt                 bridge design: O22 validation, modes, pin maps, decisions
     |-- sources.txt               third-party documents: sub-directory, file, URL, description
     |-- fetch_docs.sh             downloads everything in sources.txt into doc/vendor/
     |-- vendor.sha256             checksums of the downloaded files
@@ -122,35 +127,26 @@ Related repositories
 Status
 ------
 
-Stage 1 (this commit): repository set-up, reference documents, FMC_MIPI interface
-analysis, target and compatibility research.
+Stage 1: repository set-up, reference documents, FMC_MIPI interface analysis, target and
+compatibility research.
 
-Decisions needed before the schematic (details in doc/board_compatibility.txt
-<doc/board_compatibility.txt>):
+Stage 2 (current): output connector decided - O22, the Raspberry Pi 22-pin 0.5 mm camera
+connector, for Raspberry Pi boards (22-to-15-pin cable where needed), Jetson Nano-class
+boards and the Astra Machina SL2610. Validation and the proposed design are in
+doc/design.txt <doc/design.txt>. Main results:
 
-1. Output connectors. The research suggests an RPi 15-pin 1.0 mm output (2 lanes, port
-   C) plus an RPi 22-pin 0.5 mm output (2 or 4 lanes). Together they reach about 25
-   popular boards directly.
+- One 22-pin connector has only one clock lane. Ports C and D, each with its clock, need
+  two connectors: CAM0 (port C, plus port D as lanes 2/3 for 4-lane mode) and CAM1 (port D).
 
-2. Whether the 22-pin output supports 4 lanes (ports C+D with the clock from C). The
-   firmware must drive both ports with the same timing.
+- Two-camera mode runs the ports in lock-step (shared HS/LP select on FMC_MIPI).
 
-3. Host I/O level selection (1.8 V / 3.3 V), needed for TI SK boards, Jetson Orin Nano
-   GPIOs and, possibly, the Coralboard.
+- 4-lane mode needs about 46 mm of length compensation: port D is 48.7 mm shorter than
+  port C on FMC_MIPI.
 
-4. CAM_IO1 routing (FPGA RST input, FPGA MCLK input, or open) and CAM_IO0 polarity
-   handling.
+- I2C still needs translation: all targets use 3.3 V, the J2 side is 1.8 V. Host GPIOs into
+  J2 need none.
 
-5. Which J2 I2C bus goes to which output, and whether the FMC_MIPI EEPROM (0x54/0x5C)
-   should be visible to the hosts.
-
-6. Coralboard SL: identify the CSI connector on a real board (pin 1, 3V3, I2C level). It
-   is not published.
-
-7. Mechanics: bridge position under FMC_MIPI J2 (5 mm stack), FFC exit direction,
-   support/standoffs.
-
-8. KiCad version for the new project (FMC_MIPI uses KiCad 6.0.9).
+Open decisions: see doc/design.txt section 6.
 
 License
 -------

@@ -36,6 +36,7 @@ connectors    samtec-qth-xxx-x-d-a-mkt.pdf                     https://suddendoc
 # --- FPGA side (KC705 + D-PHY emulation used by FMC_MIPI) --------------------------------
 fpga_amd      xapp894-d-phy-solutions.pdf                      https://docs.amd.com/api/khub/documents/3CJjPuMjhJXFySrDuQE6eQ/content                   AMD XAPP894 D-PHY solutions (resistor-network D-PHY TX used by FMC_MIPI)
 fpga_amd      ug810_KC705_Eval_Bd.pdf                          https://docs.amd.com/api/khub/documents/g0YC14NTyJ_D9ZQTSmzzWg/content                   AMD UG810 KC705 board user guide (FMC HPC/LPC, VADJ)
+fpga_amd      xc7k325tffg900pkg.txt                            https://www.xilinx.com/support/packagefiles/k7packages/xc7k325tffg900pkg.txt           AMD XC7K325T-FFG900 package file (pin -> bank, HR/HP); port C HS in bank 16, port D in bank 17
 
 # --- Parts on the FMC_MIPI side of J2 (define the interface electrically) ----------------
 fmc_mipi_parts tca9406.pdf                                     https://www.ti.com/lit/ds/symlink/tca9406.pdf                                             TI TCA9406 I2C level translator (FMC_MIPI IC3-IC5, J2 side at 1.8 V)

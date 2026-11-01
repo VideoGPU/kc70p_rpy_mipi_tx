@@ -1,0 +1,591 @@
+kc70p_rpy_mipi_tx - bridge design document
+==========================================
+
+  Revision: 0.1, 2026-11-01. First issue: validation of the O22 output-connector decision.
+  Status:   PROPOSED. Section 6 lists the decisions that need approval.
+
+Contents
+--------
+
+  1. Decision under review
+  2. Results summary
+  3. Validation details
+  4. Proposed bridge design
+  5. Firmware and host-software prerequisites
+  6. Open decisions
+  7. Risks
+  8. Bring-up checklist
+  9. References
+
+Conventions
+-----------
+
+  PASS / CONDITIONAL / FAIL  validation result
+  H / M / L                  confidence: H = read in a schematic, netlist, PCB file,
+                             datasheet or vendor document; M = inferred from vendor material;
+                             L = from the earlier board survey, not re-checked
+  R22                        Raspberry Pi 22-pin 0.5 mm camera pinout (Pi 5, Pi Zero, CM IO)
+  R15                        Raspberry Pi 15-pin 1.0 mm camera pinout (Pi 1-4)
+  CAM0, CAM1                 the two camera-side connectors of the bridge (section 4)
+  J2 nn                      pin nn of FMC_MIPI J2 (Jetson TX2 camera pinout)
+  Port C, port D             the two 2-lane CSI ports of FMC_MIPI (fmc_mipi_interface.txt)
+  Delay                      FMC_MIPI stack-up (er 4.5): about 6.2 ps/mm on outer layers,
+                             7.1 ps/mm on inner layers
+  At 800 Mb/s                UI = 1250 ps
+
+
+1. Decision under review
+------------------------
+
+  D-1  Bridge output: O22, the Raspberry Pi 22-pin 0.5 mm camera connector (R22 pinout).
+  D-2  Wire both FMC_MIPI CSI ports, C and D, each with its own clock, so that both a
+       two-camera set-up and a 4-lane set-up can be tested.
+  D-3  No level shifting on the bridge: all 1.8 V lines are level-shifted on FMC_MIPI.
+  D-4  Target hosts:
+       - Raspberry Pi boards (wherever RPi cameras work), with a 22-to-15-pin cable when the
+         host has the 15-pin connector (Pi 1-4, including the Pi 3 B+);
+       - NVIDIA Jetson Nano-class boards (Jetson Nano, Orin Nano and others);
+       - Synaptics Astra Machina SL2610 developer kit.
+       The Coralboard SL (earlier target 3) is not in this list; see OD-5.
+
+
+2. Results summary
+------------------
+
+  Item                          Result        Finding / action
+  ----------------------------  ------------  ---------------------------------------------
+  D-1  R22 for all targets      PASS          Every target takes an R22 connector directly
+                                              or through a 22-15 cable. Cable contact type
+                                              must be verified per host (3.8).
+  D-2  C and D, each with its   FAIL as one   An R22 connector has 4 data lanes and only
+       clock, on one R22        connector     1 clock. Use two R22 connectors:
+                                              CAM0 = port C clock, lanes 0/1 = port C,
+                                              lanes 2/3 = port D (4-lane mode);
+                                              CAM1 = port D clock and lanes. (3.1)
+  D-2  Two-camera set-up        CONDITIONAL   Needs the two connectors above. Both ports run
+                                              in lock-step, because FMC_MIPI switches HS/LP
+                                              of both ports together. Needs a second I2C
+                                              target in the firmware. (3.2)
+  D-2  4-lane set-up            CONDITIONAL   On FMC_MIPI, port D is 48.7 mm shorter than
+                                              port C: about 300 ps, 12 times the D-PHY
+                                              limit. The bridge (or the firmware) must
+                                              compensate. (3.3)
+  D-3  No level shifting        FAIL for I2C  All targets pull the camera I2C up to 3.3 V;
+                                PASS for      the J2 I2C pins are a 1.8 V TCA9406 A port
+                                GPIO          (absolute maximum 2.3 V). Add one PCA9306 and
+                                              one 1.8 V LDO per connector. Host GPIOs into
+                                              J2 are fine (inputs tolerate 3.6 V). (3.4)
+  D-4  Raspberry Pi             PASS          2 lanes on every model with a camera
+                                              connector. 4 lanes and two cameras on Pi 5,
+                                              CM4 IO, CM5 IO. (3.7)
+  D-4  Jetson Nano, Xavier NX   PASS          2 lanes per 15-pin connector; two cameras on
+                                              Nano B01 and Xavier NX; no 4-lane. (3.7)
+  D-4  Jetson Orin Nano         PASS          2 lanes on CAM0, 4 lanes on CAM1, two
+                                              cameras. Its GPIOs are 1.8 V: accepted. (3.7)
+  D-4  Machina SL2610           PASS          2 lanes, one camera (one CSI port). Its camera
+                                              I2C bus also carries board power control.
+
+  Net result: the decision works with two changes. The bridge gets two R22 connectors
+  instead of one, and it keeps a small I2C translation stage. The rest of D-1 to D-4 is
+  confirmed.
+
+
+3. Validation details
+---------------------
+
+3.1 Connector capacity (D-1, D-2)
+
+  An R22 connector carries five differential pairs: D0 (pins 2/3), D1 (5/6), CK (8/9),
+  D2 (11/12), D3 (14/15), plus CAM_IO0 (17), CAM_IO1 (18), SCL (20), SDA (21) and 3V3 (22).
+  It has exactly one clock lane. All 4-lane R22 hosts (Pi 5, CM4 IO CAM1, CM5 IO, Jetson Orin
+  Nano CAM1) clock four lanes from that one clock. (H: rpi-doc-camera-pinouts.adoc, NVIDIA
+  Orin Nano hardware layout.)
+
+  FMC_MIPI ports C and D are six pairs (two clocks, four data lanes). The second clock has no
+  place on an R22 connector except the GPIO, I2C or supply pins, which no host would accept.
+  A two-camera set-up also needs two host connectors anyway: each camera has its own
+  connector, enable line and I2C bus (or I2C mux channel) on every host.
+
+  Therefore two R22 connectors:
+    CAM0  port C clock; lanes 0/1 = port C D0/D1; lanes 2/3 = port D D0/D1 (4-lane mode)
+    CAM1  port D clock; lanes 0/1 = port D D0/D1 (two-camera mode); lanes 2/3 not connected
+  The port D data lanes go either to CAM0 lanes 2/3 or to CAM1 lanes 0/1, selected by
+  assembly option (4.3). Wiring them to both connectors at once would leave an open stub of
+  10-50 mm on every port D lane, and a whole cable length if a cable is plugged into the
+  unused connector.
+
+  Single-connector alternative: CAM0 only. It covers 2-lane and 4-lane, but not two cameras.
+  Two streams on one link are still possible as CSI-2 virtual channels (firmware only; the
+  SL2610 RX supports two virtual channels, other hosts to be checked).
+
+3.2 FMC_MIPI constraints on the operating modes (D-2)
+
+  Facts (FMC_MIPI netlist and MIPI_CSI2_TX sources, H):
+  - HS/LP selection is shared. FMC pin LA08_P drives SEL1 of both U5 (port C) and U6
+    (port D): the data lanes of both ports. LA08_N drives SEL2 of both: both clock lanes.
+  - The port enables are separate: LA09_P enables U5 (port C), LA09_N enables U6 (port D).
+  - Every LP line has its own FPGA pin (U8, 1.2 V).
+  - HS outputs are BLVDS_25: port C in FPGA bank 16, port D in bank 17. Both are HR banks
+    powered from VADJ, which must stay at 2.5 V (KC705 default). All serializers run from one
+    400 MHz MMCM output.
+  - MIPI_CSI2_TX branch adding_axi_interface already serializes four lanes (a second
+    serializer for lanes 2/3) and drives the same LP state on all lanes.
+
+  Modes:
+    M1  one camera, 2 lanes   port C                CAM0         the original Jetson TX2 use
+    M2  one camera, 2 lanes   port D                CAM1         port D: no test record found
+    M3  one camera, 4 lanes   C clock + C lanes     CAM0         lane 2 = port D D0,
+                              + D lanes                          lane 3 = port D D1;
+                                                                 port D clock unused (LP-11)
+    M4  two cameras           C and D               CAM0, CAM1   lock-step, see below
+
+  M4 works only in lock-step: the two streams need the same line and frame timing and the
+  same packet lengths (for example a stereo pair). The image content can differ; the
+  resolution and frame rate cannot. CAM0 and CAM1 can be connected to two ports of one host
+  or to two different hosts.
+
+3.3 Lane timing (D-2, 4-lane mode)
+
+  D-PHY limits (MIPI D-PHY v1.00, local copy, see 9):
+  - 7.6.6 Inter-lane static skew: the delay difference between any data lane and the clock
+    lane of the interconnect must be less than UI/50. At 800 Mb/s: 25 ps, about 4 mm.
+  - Table 27: TX data-to-clock skew +/-0.15 UI; RX setup and hold 0.15 UI each. The budget
+    leaves +/-0.2 UI for everything the interconnect adds.
+  - No receiver deskew at these rates (deskew calibration exists only in D-PHY v1.2 and
+    later, above 1.5 Gb/s).
+
+  HS path lengths on FMC_MIPI, FMC J1 pad to J2 pad (FMC_MIPI_v2.kicad_pcb, commit 6afc7c8;
+  all on outer layers; P and N equal within 0.1 mm) (H):
+
+    Lane     J1 -> resistor net   net -> TS3DDR3812   TS3DDR3812 -> J2   Total
+    C CLK          94.2                 20.4                12.0         126.6 mm
+    C D0           93.9                 18.2                11.4         123.5 mm
+    C D1           89.6                 21.8                12.1         123.5 mm
+    D CLK          36.4                 17.6                23.9          77.9 mm
+    D D0           39.0                 16.4                22.5          77.9 mm
+    D D1           30.1                 19.6                28.1          77.9 mm
+
+  Within a port the lanes are matched: port C data lanes are 3.1 mm (about 19 ps) shorter
+  than the port C clock, port D is matched within 0.1 mm. Modes M1, M2 and M4 are within the
+  limit.
+
+  Across the ports (mode M3, clock from port C): the port D lanes are 48.7 mm shorter than
+  the port C clock, about 300 ps or 0.24 UI. That is 12 times the static-skew limit. M3
+  does not work without compensation.
+
+  Compensation (decision OD-3):
+    a) On the bridge (recommended). The CAM0 lane 2/3 branch is 45.7 mm longer than the CAM0
+       lane 0/1 traces, as serpentine on the same layer type. It is deterministic,
+       independent of the firmware, and only affects mode M3.
+    b) In the firmware. Delay all of bank 17 (port D) by about 300 ps, using a separate MMCM
+       output with dynamic fine phase shift (steps of 1/56 of the VCO period, about
+       15-30 ps). The banks are HR, so ODELAYE2 is not available. Shifting the whole port
+       keeps M2 and M4 intact.
+    Use a) for the bulk and b) to trim the residual measured at bring-up: the KC705 FMC
+    trace lengths are not published (UG810 gives none).
+
+  Target for the PCB part (FMC_MIPI + bridge, each lane against the clock of its connector):
+  within 2 mm (about 12 ps); P/N within 0.1 mm. The limit tightens with the lane rate: at
+  1.5 Gb/s, UI/50 is 13 ps.
+
+3.4 Voltage levels (D-3)
+
+  What FMC_MIPI does (netlist, H). It translates between the FPGA (VADJ, 2.5 V) and the J2
+  side. The J2 side is fixed at 1.8 V by FMC_MIPI's own regulator (U1, LP5907-1.8):
+    J2 75/77, 87/89, 105/107 (I2C)   TCA9406 A port, VCCA = 1.8 V, internal 10 kOhm pull-ups
+                                     to 1.8 V
+    J2 91, 93, 95 (host -> FPGA)     SN74AVCH16T245 A-port inputs, VCCA = 1.8 V, bus-hold
+    J2 112, 117 (FPGA -> host)       SN74AVCH16T245 outputs, 1.8 V push-pull
+
+  What the hosts present:
+    Raspberry Pi    I2C pulled up to 3.3 V on the Pi (1.8 kOhm on the Pi 3 B+); CAM_IO
+                    3.3 V (H)
+    Machina SL2610  I2C on the 3.3 V side of the I/O-board level shifter; GPIOs 3.3 V (H)
+    Orin Nano       I2C 3.3 V; PWDN and MCLK 1.8 V (NVIDIA carrier spec via survey, L)
+    Jetson Nano     I2C 3.3 V (inferred: the board accepts the RPi camera v2, M)
+
+  Results:
+  - I2C: FAIL without translation. Wired directly, the Pi's 1.8 kOhm pull-up to 3.3 V against
+    the TCA9406's 10 kOhm to 1.8 V puts about 3.1 V on the A port. The TCA9406 absolute
+    maximum for an A-port I/O in the high or low state is VCCA + 0.5 V = 2.3 V, and the
+    recommended VIH maximum is VCCA. About 0.13 mA per line would also flow into FMC_MIPI's
+    1.8 V rail. Each connector therefore needs a 2-channel translator.
+  - Host -> FPGA GPIO (CAM_IO0/IO1 -> J2 91/93/95): PASS. AVCH data inputs accept 0-3.6 V at
+    any VCCA (recommended operating conditions), and VIH = 0.65 x 1.8 V = 1.17 V. Both 1.8 V
+    (Orin Nano) and 3.3 V (Pi, Machina) hosts work. Add 1 kOhm series resistors, and no pull
+    resistors on the bus-hold inputs (TI recommendation).
+  - FPGA -> host GPIO (J2 112/117): not needed. R22 has no camera-to-host signal.
+  - Supply: J2 delivers no power (FMC_MIPI only senses host rails). The translator needs a
+    1.8 V reference, so each connector gets a small LDO powered from its own 3V3 pin.
+
+  Translator: TI PCA9306 (pass FET, 3.5 Ohm on-resistance). VREF1 = 1.8 V from the LDO;
+  VREF2 and EN tied together, with 200 kOhm to the host 3V3. It has no one-shot of its own,
+  so it can be placed in series with the TCA9406. It passes clock stretching and isolates
+  both sides when the host is off (EN low).
+  - The TCA9406 A port needs VIL <= 0.15 V. Do not use a buffer with a static low offset
+    (TCA9517/PCA9517 B side) toward it, and add no series resistance between the PCA9306 and
+    J2.
+  - No pull-ups on the J2 side of the bridge; the TCA9406's internal 10 kOhm are enough. A
+    pull-up to the bridge LDO would pull the bus down whenever the host is off.
+
+3.5 Power, host sensing and back-powering
+
+  - Each camera connector is its own power domain, supplied by that connector's 3V3 (pin 22).
+    The two 3V3 pins must never be connected together: CAM0 and CAM1 may go to two different
+    hosts.
+  - Load per connector: LDO, PCA9306 and pull-up current, under 5 mA. The Cameleon rule
+    CAM-SYS-014 allows at most 10 mA per host rail.
+  - On FMC_MIPI, J2 108 and 110 are one net, and J2 81-83 are another. Mapping:
+      Source             J2 pin       FMC_MIPI sense  FPGA pin    Meaning
+      CAM0 3V3           108, 110     VDD_3V3         LA01_N_CC   CAM0 host present
+      CAM1 3V3           81, 82, 83   AVDD 2V8        LA01_P_CC   CAM1 host present
+      CAM0 1.8 V (LDO0)  102          1V8             LA25_P      CAM0 bridge 1.8 V
+      CAM1 1.8 V (LDO1)  101          1V2             LA02_N      option, default open
+    Every sense input has a 2.2 kOhm series resistor on FMC_MIPI and a buffer with
+    partial-power-down (Ioff), so no back-feeding in either direction. J2 109/118/120 (5 V)
+    stay open.
+  - Firmware rule: enable U5 (port C) only while CAM0 3V3 is present, and U6 (port D) only
+    while the connector it is routed to is powered. This avoids driving D-PHY into an
+    unpowered host.
+
+3.6 Control signals (CAM_IO0, CAM_IO1)
+
+  Both are host outputs; the bridge only listens.
+    Host              CAM_IO0 (R22 17 / R15 11)          CAM_IO1 (R22 18 / R15 12)
+    Raspberry Pi      camera power enable, active high   LED / GPIO (Pi 4: not connected)
+    Machina SL2610    PWR_ON_CSI0, 1 = on, 3.3 V         GPIO_CSI0, "reserved", 3.3 V
+    Jetson Nano, XNX  CAM PWDN (driven high = on)        MCLK output
+    Orin Nano         CAM PWDN, 1.8 V                    MCLK, 1.8 V
+  On every target, "high" means "camera on".
+
+  FMC_MIPI has three host -> FPGA inputs on J2: 91 (CAM0_MCLK), 93 (CAM0_PWR) and 95
+  (CAM0_RST). Mapping:
+    CAM0 IO0 -> J2 93   "CAM0 enable"
+    CAM1 IO0 -> J2 95   "CAM1 enable" (the J2 reset input is reused)
+    CAM0 IO1 or CAM1 IO1 -> J2 91 (0 Ohm option, default CAM0)
+  The firmware must read J2 93 and 95 as the enables of CAM0 and CAM1. While an enable is low
+  it should behave like an unpowered camera (no I2C acknowledge, lanes off).
+
+3.7 Host-by-host check
+
+  Host                  Host connector      Cable  Lanes        2-lane 4-lane 2 cams Conf
+  --------------------  ------------------  -----  -----------  ------ ------ ------ ----
+  Raspberry Pi 3 B+     1x R15              22-15  2, 1 Gb/s    yes    no     no     H
+  Raspberry Pi 4 B      1x R15              22-15  2, 1 Gb/s    yes    no     no     H
+  Raspberry Pi 5        2x R22 (cam/disp)   22-22  4, 1.5 Gb/s  yes    yes    yes    H
+  Pi Zero 2 W           1x R22, 2 lanes     22-22  2            yes    no     no     H
+  CM4 IO board          CAM0 R22 2 lanes,   22-22  2 / 4        yes    CAM1   yes    H
+                        CAM1 R22 4 lanes
+  CM5 IO board          2x R22              22-22  4            yes    yes    yes    M
+  Jetson Nano A02, 2GB  1x R15-like         22-15  2            yes    no     no     H/M
+  Jetson Nano B01       2x R15-like         22-15  2 each       yes    no     yes    H/M
+  Jetson Xavier NX DK   2x R15-like         22-15  2 each       yes    no     yes    M
+  Jetson Orin Nano DK   2x R22, bottom      22-22  CAM0 2,      yes    CAM1   yes    H
+  (also Orin NX)        contact                    CAM1 2 or 4
+  Machina SL2610        1x R22 (J206),      22-22  2, 1.5 Gb/s  yes    no     no     H
+                        bottom contact
+  Seeed reComputer J401 2x R15-like         22-15  ?            yes?   ?      yes?   L
+
+  All lane rates are at or above 1 Gb/s, so the 800 Mb/s of MIPI_CSI2_TX is accepted
+  everywhere.
+
+  Host notes:
+  - Pi 3 B+ and Pi 4: one camera port, 2 lanes. The camera I2C on the 3 B+ also goes to the
+    display connector.
+  - CM4 IO: CAM0 needs both J6 jumpers to route I2C. CM5 IO: CAM/DISP 1 needs the J6
+    jumpers.
+  - Jetson Nano B01: the two connectors share an I2C bus through a mux, so two identical
+    sensor addresses are allowed (survey, M).
+  - Orin Nano: its PWDN and MCLK at 1.8 V meet the J2 input threshold (1.17 V).
+  - Machina: only J206 is used with the SL2610; J207 belongs to the SL1680 core module.
+    The camera I2C (SM_TW0) also carries current monitors (0x40-0x42, 0x45) and the IO
+    expanders (0x43, 0x44) that switch board power, including PWR_ON_CSI0. The bridge must
+    never hold this bus low. FMC_MIPI's EEPROM (0x54 / EUI 0x5C) does not collide.
+
+3.8 Cables and connector orientation
+
+  Rule: between two given FPC connectors only one cable type maps pin 1 to pin 1, either
+  same-side contacts or opposite-side contacts. Twisting or folding the cable does not change
+  this; the wrong type reverses the pin order.
+
+  With R22 a reversed pin order puts the host 3V3 (pin 22) on GND (pin 1) and SDA/SCL on lane
+  0: a direct short of the host's camera supply. Check every new cable before power-up (8).
+
+  Cables needed:
+    22-15 (2 lanes): the Raspberry Pi "Standard-Mini" camera cable (drawing RP-008145:
+      22 pins 0.5 mm, 11.5 mm wide, to 15 pins 1.0 mm, 16 mm wide), plus a cable of the other
+      contact type.
+    22-22 (4 lanes): 0.5 mm 22-pin FFC, both contact types.
+  Which type a host needs depends on the bridge connector and is not documented for most
+  hosts (Orin Nano and Machina J206 are known to be bottom contact).
+
+  Recommendation (OD-4): a dual-contact 22-pin 0.5 mm ZIF connector (contacts on top and
+  bottom) on the bridge. It accepts either cable type: insert the cable contacts-up for one
+  type and contacts-down for the other. Example to verify: Molex 503480-2200 (Easy-On,
+  dual contact). Fallback: Hirose FH12-22S-0.5SH(55), the part on the Raspberry Pi CM4 IO
+  board's CAM/DISP connectors (J4, J5, J15, J16; stock KiCad footprint
+  Hirose_FH12-22S-0.5SH_1x22-1MP_P0.50mm_Horizontal). With the fallback, stock both cable
+  types.
+
+3.9 Mechanics
+
+  From FMC_MIPI_v2.kicad_pcb (H):
+  - FMC_MIPI outline: 69.3 x 111.8 mm. J1 (FMC, ASP-134488-01) and J2 (QTH-060-01-L-D-A) are
+    both on the bottom side.
+  - J1 is centred across the board, 10.7 mm from the rear edge.
+  - J2 runs along the board; its centre line is 9.7 mm from the long edge. Its pads span
+    53.2 to 91.6 mm from the J1 centre, with pin 1 at the end nearest J1. Odd pins are on the
+    inner row (port C lanes), even pins on the outer row (port D lanes). The lane pins
+    (19-34) are 59.6-63.1 mm from the J1 centre; the I2C, control and supply pins (75-120)
+    are at the far end, 78.6-89.6 mm.
+  - No mounting holes near J2 (only its two 1.0 mm alignment holes). The only bottom-side
+    parts near J2 are 0402 capacitors (C13, C20, C22, C23, C24).
+
+  Consequences:
+  - The bridge plugs into J2 from below. QSH-060-01-L-D-A goes on the bridge top side; the
+    mated height is 5 mm, and the bridge hangs under FMC_MIPI.
+  - The FMC mated height is 10 mm. Under any part of J2 that lies over the KC705 board, only
+    about 3.4 mm remain below the bridge PCB (10 - 5 - 1.6 mm). Measured from FMC_MIPI's rear
+    edge, a standard FMC card (76.5 mm deep) would end about 66 mm from J1, so J2 probably
+    straddles the KC705 front edge. Measure on the bench before drawing the outline.
+  - The bridge needs its own support (standoff, foot or bracket); the QSH/QTH pair must not
+    carry cable forces.
+  - Place CAM0 and CAM1 on the bridge edge facing away from FMC_MIPI and the KC705, at least
+    20 mm apart.
+  - QSH footprint: reuse samtec-qsh-QSH-060-01-X-D-A.kicad_mod from the FMC_MIPI library.
+    J2 sits on the bottom of FMC_MIPI, so check pin-1 orientation (mirror) against J2 before
+    routing.
+  - J2 pairs are P before N (19 = D0+, 21 = D0-); R22 pairs are N before P (2 = D0-,
+    3 = D0+). Expect one P/N crossover per pair unless the connector orientation already
+    reverses the order.
+
+
+4. Proposed bridge design
+-------------------------
+
+4.1 Block diagram
+
+     FMC_MIPI J2 (Samtec QTH-060, bottom side of FMC_MIPI)
+          ||  5 mm
+   +------++----------------------------------------------------------------------------+
+   |  QSH socket: Samtec QSH-060-01-L-D-A on the bridge top side                        |
+   |                                                                                    |
+   |  port C  CLK, D0, D1 ---------------------------------------> CAM0 CK, D0, D1      |
+   |  port D  D0, D1 --+--[R-M3]--( +45.7 mm serpentine )--------> CAM0 D2, D3          |
+   |                   +--[R-M4]---------------------------------> CAM1 D0, D1          |
+   |  port D  CLK -----------------------------------------------> CAM1 CK              |
+   |                                                                                    |
+   |  J2 75/77   I2C_CAM   <-> PCA9306 #0 <-> CAM0 SCL/SDA                              |
+   |  J2 87/89   CAM_I2C2  <-> PCA9306 #1 <-> CAM1 SCL/SDA                              |
+   |  J2 105/107 I2C_GP0    -> debug header (1.8 V, optional)                           |
+   |                                                                                    |
+   |  CAM0 IO0 -> 1k -> J2 93     CAM1 IO0 -> 1k -> J2 95     IO1 -> J2 91 (option)     |
+   |  CAM0 3V3 -> J2 108/110, LDO0 -> 1.8 V -> PCA9306 #0 VREF1, J2 102                 |
+   |  CAM1 3V3 -> J2 81-83,   LDO1 -> 1.8 V -> PCA9306 #1 VREF1, J2 101 (option)        |
+   +------------------------------------------------------------------------------------+
+
+4.2 Pin maps
+
+  CAM0 (R22)
+    Pin    Signal    Connected to
+    1      GND       GND
+    2, 3   D0-, D0+  J2 21, 19   CSI_C_D0_N, CSI_C_D0_P
+    4      GND       GND
+    5, 6   D1-, D1+  J2 33, 31   CSI_C_D1_N, CSI_C_D1_P
+    7      GND       GND
+    8, 9   CK-, CK+  J2 27, 25   CSI_C_CLK_N, CSI_C_CLK_P
+    10     GND       GND
+    11, 12 D2-, D2+  J2 22, 20   CSI_D_D0_N, CSI_D_D0_P   (R-M3, +45.7 mm)
+    13     GND       GND
+    14, 15 D3-, D3+  J2 34, 32   CSI_D_D1_N, CSI_D_D1_P   (R-M3, +45.7 mm)
+    16     GND       GND
+    17     CAM_IO0   1 kOhm -> J2 93 (GPIO0_CAM0_PWR); LDO0 enable option (JP-EN0)
+    18     CAM_IO1   0 Ohm option -> J2 91 (CAM0_MCLK)
+    19     GND       GND
+    20     SCL       PCA9306 #0 SCL2; SCL1 <-> J2 75 (I2C_CAM_CLK)
+    21     SDA       PCA9306 #0 SDA2; SDA1 <-> J2 77 (I2C_CAM_DAT)
+    22     3V3       CAM0 domain: LDO0 input, PCA9306 #0 VREF2/EN (200 kOhm), J2 108 + 110
+
+  CAM1 (R22). GND pins as CAM0.
+    2, 3   D0-, D0+  J2 22, 20   CSI_D_D0_N, CSI_D_D0_P   (R-M4)
+    5, 6   D1-, D1+  J2 34, 32   CSI_D_D1_N, CSI_D_D1_P   (R-M4)
+    8, 9   CK-, CK+  J2 28, 26   CSI_D_CLK_N, CSI_D_CLK_P
+    11-15  D2, D3    not connected
+    17     CAM_IO0   1 kOhm -> J2 95 (GPIO2_CAM0_RST, read as CAM1 enable); LDO1 enable
+                     option (JP-EN1)
+    18     CAM_IO1   0 Ohm option -> J2 91 (alternative to CAM0 IO1), default open
+    20, 21 SCL, SDA  PCA9306 #1 <-> J2 87, 89 (CAM_I2C2)
+    22     3V3       CAM1 domain: LDO1, PCA9306 #1, J2 81 + 82 + 83
+
+  Other J2 pins
+    GND pins and G1-G8        bridge GND
+    J2 105, 107 (I2C_GP0)     optional debug header, 1.8 V side, with GND
+    J2 112, 117 (FPGA out)    test points only
+    All remaining J2 pins     open (see fmc_mipi_interface.txt)
+
+  FMC_MIPI's EEPROM sits on I2C_CAM, so CAM0's host sees 0x54 and 0x5C. This collides with
+  nothing on the targets: the Machina bus uses 0x40-0x45, the sensors use 0x10, 0x1A or 0x36.
+
+4.3 Assembly options
+
+  Option    Parts                        M1/M2 (one camera)  M3 (4 lanes)  M4 (two cameras)
+  R-M3      4 x 0 Ohm, D lanes -> CAM0   not fitted          fitted        not fitted
+  R-M4      4 x 0 Ohm, D lanes -> CAM1   fitted              not fitted    fitted
+  JP-EN0/1  LDO enable: 3V3 or CAM_IO0   3V3                 3V3           3V3
+  JP-I2C0/1 PCA9306 EN: on / off         on                  on            on
+  R-IO1     IO1 -> J2 91: CAM0/CAM1/off  CAM0                CAM0          CAM0
+
+  - R-M3/R-M4 sit at the split point next to the QSH socket, on shared pads, so the unused
+    branch leaves no stub (under 1 mm).
+  - JP-EN default 3V3: the LDO is on whenever the host is powered, and the FPGA emulates the
+    camera power state from CAM_IO0. In the IO0 position the LDO, and with it the PCA9306
+    reference (VREF1), is off while CAM_IO0 is low. The translator then does not pass the
+    bus: the bridge behaves like a camera without power. Use it for hosts whose drivers
+    expect a real power-up of the camera.
+  - Alternative to R-M3/R-M4 (decision OD-2): a passive 2:1 MIPI switch with a mode jumper
+    (candidates from FMC_MIPI review_2021: TI TMUXHS4412, Diodes PI3WVR628, TI TS5MP645). It
+    puts a second switch in series with FMC_MIPI's TS3DDR3812.
+
+4.4 PCB rules
+
+  - At least 4 layers (signal / GND / GND and power / signal). 100 Ohm +/-10 % differential,
+    continuous GND under every lane. No test-point stubs on the lanes; probe at the
+    connectors.
+  - Length rules, pad to pad (QSH socket -> CAMx), for 800 Mb/s:
+      CAM0 lanes 0/1   = CAM0 clock + 3.1 mm         (makes up FMC_MIPI port C's 3.1 mm)
+      CAM0 lanes 2/3   = CAM0 lanes 0/1 + 45.7 mm    (R-M3 branch)
+      CAM1 lanes 0/1   = CAM1 clock, within 0.5 mm   (R-M4 branch)
+      Tolerance 0.5 mm per lane, 0.1 mm within a pair. Match delay, not length, when a lane
+      changes layer type (6.2 ps/mm outer, 7.1 ps/mm inner).
+  - Keep the bridge short: every millimetre adds to a channel that already contains
+    FMC_MIPI's marginal TS3DDR3812.
+  - ESD: none on the lanes (or parts of 0.3 pF or less, not fitted). Optional TVS footprints
+    on 3V3, CAM_IO and I2C.
+
+4.5 Preliminary BOM
+
+  Ref       Part                                Qty  Note
+  J1        Samtec QSH-060-01-L-D-A             1    QSH socket; mates FMC_MIPI J2 (QTH-060),
+                                                     5 mm stack
+  CAM0/1    22-pin 0.5 mm ZIF FPC connector     2    dual contact preferred (3.8)
+  U1, U2    TI PCA9306                          2    I2C 1.8 V <-> host
+  U3, U4    LP5907MFX-1.8                       2    1.8 V per connector; same part as
+                                                     FMC_MIPI U1 (LCSC C92498)
+  R         0 Ohm 0402 x 8, 1 kOhm x 4, 200 kOhm x 2, 0 Ohm options for IO1
+  JP        2-pin jumpers x 4
+  TP        3V3, 1.8 V, I2C (both sides) and CAM_IO per connector; J2 112/117; GND
+  H         2-4 holes for support standoffs
+
+
+5. Firmware and host-software prerequisites
+-------------------------------------------
+
+  The bridge hardware alone does not make a host see a camera. Needed in MIPI_CSI2_TX and on
+  the hosts:
+  - Sensor profiles in the FPGA I2C target that stock drivers accept:
+      IMX219 (address 0x10, 2 lanes, RAW10): Raspberry Pi, Jetson Nano, Xavier NX, Orin Nano
+      OV5647 (address 0x36, 2 lanes, RAW10): Raspberry Pi, Machina SL2610 (and Coralboard)
+    Today's profile is the NVIDIA E3326 / OV5693 (Jetson TX2 only), and the bring-up pixel
+    format is RGB888. Sensor drivers expect Bayer RAW8/RAW10.
+  - A second I2C target instance on CAM_I2C2 for CAM1 (mode M4).
+  - 4-lane mode (M3): CSI-2 byte distribution over lanes 0-3, with lane 2 = port D D0 and
+    lane 3 = port D D1. Branch adding_axi_interface names the lane 2/3 ports hs_c_d2/d3,
+    while its xdc names the same pins hs_d_d0/d1; the two must be reconciled.
+  - Mode M4 in lock-step (3.2).
+  - Port enables LA09_P/N gated by the host-present inputs (3.5); CAM0/CAM1 enables read
+    from J2 93/95 (3.6).
+  - Optional fine phase trim of bank 17 (3.3 b).
+  - The FPGA must be configured before the host boots, because hosts probe the camera at
+    boot (Raspberry Pi camera_auto_detect, Jetson and Machina device-tree drivers).
+  - Host 4-lane test drivers (M): Pi 5, CM4 IO CAM1 and CM5 IO: the imx290 overlay with its
+    4lane parameter, or tc358743 with 4lane (HDMI-bridge emulation, RGB888/YUV422, no ISP).
+    Orin Nano CAM1: a custom device tree (the stock overlays cover 2-lane IMX219/IMX477).
+  - Host two-camera drivers (M): Pi 5 (cam0 + cam1 overlays), Jetson Nano B01 and Orin Nano
+    (dual IMX219 configurations).
+
+
+6. Open decisions
+-----------------
+
+  OD-1  Two R22 connectors, CAM0 and CAM1, instead of one.                 Recommended: yes
+  OD-2  Port D routing: 0 Ohm assembly options or a 2:1 MIPI switch.       Recommended: 0 Ohm
+  OD-3  4-lane skew: bridge serpentine and/or firmware phase trim.         Recommended: both
+  OD-4  Bridge connector: dual-contact 22-pin, or the CM4 IO part (Hirose  Recommended:
+        FH12-22S-0.5SH) with both cable types.                             dual contact
+  OD-5  Coralboard SL: dropped from the targets, or kept pending a
+        connector measurement?
+  OD-6  KiCad version for the bridge project (FMC_MIPI uses 6.0.9).
+  OD-7  Debug header for I2C_GP0 and test points for J2 112/117.
+
+
+7. Risks
+--------
+
+  R-1  KC705 FMC trace lengths unknown: residual skew in mode M3.
+       Mitigation: measure at bring-up, trim in firmware (3.3 b).
+  R-2  FMC_MIPI's TS3DDR3812 is marginal for HS signals (FMC_MIPI review_2021).
+       Mitigation: short bridge channel; check the eye at the host connector.
+  R-3  TCA9406 A-port VIL is 0.15 V maximum: a host whose I2C low level is higher may not be
+       seen by the FPGA. Mitigation: measure the low level on the J2 side; keep a footprint
+       for an alternative translator.
+  R-4  A wrong cable type shorts the host 3V3 to GND.
+       Mitigation: dual-contact connector, continuity check (8), silkscreen pin-1 marks.
+  R-5  Port D has no hardware test record. Mitigation: test M2 before M3/M4.
+  R-6  Machina's camera bus carries board power control.
+       Mitigation: PCA9306 EN jumper; the firmware never holds SDA or SCL low.
+  R-7  J2 position against the KC705 edge (only 3.4 mm clearance over the board).
+       Mitigation: measure first (3.9).
+  R-8  Cable forces on the QSH/QTH pair. Mitigation: support standoff, cable strain relief.
+  R-9  Ground loops between the KC705 and up to two hosts.
+       Mitigation: one mains strip; plug FFCs only with all boards off.
+
+
+8. Bring-up checklist
+---------------------
+
+  1. Measure FMC_MIPI J2 against the KC705 edge; confirm the bridge outline (3.9).
+  2. KC705 alone: the host-present inputs read "no host"; U5 and U6 are disabled.
+  3. Cable check with the host off: continuity bridge GND <-> host GND (Pi: header pin 6) and
+     bridge CAMx 3V3 test point <-> host 3V3 (Pi: header pin 1); no continuity between the
+     two.
+  4. Host on: CAMx 3V3 present, LDO 1.8 V present, PCA9306 enabled.
+  5. I2C: the host sees the emulated sensor (CAM0 also 0x54/0x5C). Measure the low level on
+     the J2 side (must be under 0.15 V).
+  6. Modes in order, at 800 Mb/s: M1 and M2 (2 lanes each), then M4, then M3.
+  7. M3: send a clock-like pattern on all lanes and measure the lane-to-clock skew at CAM0.
+     Trim in the firmware if it exceeds 12 ps.
+  8. Host order: Pi 3 B+ (M1), Machina (M1), Pi 5 (M1, M3, M4), Orin Nano (M1, M3, M4),
+     Jetson Nano B01 (M1, M4).
+
+
+9. References
+-------------
+
+  Project documents
+    fmc_mipi_interface.txt, target_boards.txt, board_compatibility.txt
+  doc/vendor/ (see sources.txt)
+    fmc_mipi_parts/tca9406.pdf             A-port absolute maximum, VIH/VIL, Ioff
+    fmc_mipi_parts/sn74avch16t245.pdf      input range 0-3.6 V, bus-hold
+    fmc_mipi_parts/ts3ddr3812.pdf          lane switch U5/U6
+    bridge_parts/pca9306.pdf               translator: 3.5 Ohm, 1.8 V VREF1 / 3.3 V VREF2
+    raspberry_pi/rpi-doc-camera-pinouts.adoc, raspberry-pi-3-b-plus-reduced-schematics.pdf,
+      mini-display-cable-200mm-reference-drawing.pdf, raspberry-pi-5-product-brief.pdf,
+      cm4io-datasheet.pdf, CM4IO-KiCAD.zip (FH12-22S-0.5SH(55)), cm5io-datasheet.pdf
+    synaptics_sl2610/machina-io-board-schematic.zip (J206), sl2610-datasheet.pdf
+    other_boards/jetson-orin-nano-devkit-hardware-layout.html,
+      jetson-nano-2gb-devkit-user-guide.html
+    fpga_amd/ug810_KC705_Eval_Bd.pdf (VADJ, FMC HPC pins), xc7k325tffg900pkg.txt (banks),
+      xapp894-d-phy-solutions.pdf
+  Other repositories
+    FMC_MIPI 6afc7c8: FMC_MIPI_v2.net (signals), FMC_MIPI_v2.kicad_pcb (lengths, placement),
+      review_2021.txt (switch limitation)
+    MIPI_CSI2_TX d4344fd (branch adding_axi_interface): hdl/fmc_mipi_top.vhd,
+      XilinxIPs/clock_wizard (400 MHz, 90 degree clock lane),
+      constraints/constrains_for_KC705.xdc (BLVDS_25 pins)
+    cameleon_HW: cameleon_requirements_spec.txt, CAM-SYS-012 to CAM-SYS-015
+  Specifications
+    MIPI D-PHY v1.00, local copy:
+      /home/smishash/Data1/FromWindows/Projects/HDMI3DMixer/Books/MIPI/
+        MIPI_D-PHY_Specification_v01-00-00.pdf
+      (7.6.6 inter-lane static skew, Table 27 data-clock timing). MIPI Alliance document,
+      not redistributed.
